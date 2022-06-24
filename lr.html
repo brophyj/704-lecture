@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Linear regression</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Jay Brophy" />
+    <script src="libs/header-attrs-2.13/header-attrs.js"></script>
+    <link rel="stylesheet" href="xaringan-themer.css" type="text/css" />
+    <link rel="stylesheet" href="extra.css" type="text/css" />
+  </head>
+  <body>
+    <textarea id="source">
+class: left, middle, inverse, title-slide
+
+# Linear regression
+### Jay Brophy
+### EBOH, McGill University
+### 2022/02/08 (updated: 2022-06-24)
+
+---
+
+class: top
+
+
+
+
+
+
+
+##Data visualization
+Earlier we stressed the importance of data visualization but can you guess the Pearson correlation coefficient and its associated p value?    
+
+&lt;img src="lr_files/figure-html/unnamed-chunk-1-1.svg" width="40%" style="display: block; margin: auto;" /&gt;
+ 
+--
+.red[Pretty hard, eh]  
+---
+##Methods for correlation analyses
+
+- .red[Pearson correlation (r)] - measures a **linear dependence** between two variables (x and y) when both are from **normal distribution** (to determine normality i) `shapiro.test()` ii) normality plot (`ggpubr::ggqqplot()`))       
+- .red[Kendall tau] and .red[Spearman rho] are rank-based correlation coefficients (non-parametric test)     
+
+Pearson correlation formula
+`$$r = \frac{\sum{(x-m_x)(y-m_y)}}{\sqrt{\sum{(x-m_x)^2}\sum{(y-m_y)^2}}}$$`
+where `\(m_x\)` and `\(m_y\)` are the means of x and y variables      
+p-value of the correlation determined from the *t* value
+$$t = \frac{r}{\sqrt{1-r^2}}\sqrt{n-2}  \;  \;   with \;\;  df = n-2 $$
+ where n = number of observation in x and y variables     
+ -1 &lt; r &lt; 1, no correlation r = 0
+
+---
+##Does this help?
+
+&lt;img src="lr_files/figure-html/unnamed-chunk-2-1.svg" width="50%" style="display: block; margin: auto;" /&gt;
+---
+##Analytical solution
+.pull-left[
+Using `R` 
+
+```r
+set.seed(123)
+age &lt;- runif(100,35,60); bp &lt;- 110 +0.05*age + rnorm(100, 15); df &lt;- data.frame(age,bp)
+cor.test(df$age, df$bp, method = "pearson") # cor.test(df$age, df$bp, method = "kendall"); cor.test(df$age, df$bp, method = "spearman")
+```
+
+```
+## 
+## 	Pearson's product-moment correlation
+## 
+## data:  df$age and df$bp
+## t = 3.4, df = 98, p-value = 0.001
+## alternative hypothesis: true correlation is not equal to 0
+## 95 percent confidence interval:
+##  0.1366 0.4896
+## sample estimates:
+##    cor 
+## 0.3243
+```
+]
+
+.pull-right[
+
+```r
+ggpubr::ggscatter(df, x = "age", y = "bp", add = "reg.line", conf.int = TRUE, 
+    cor.coef = TRUE, cor.method = "pearson", xlab = "age", ylab = "bp") + theme_bw()       
+```
+
+&lt;img src="lr_files/figure-html/unnamed-chunk-4-1.svg" width="80%" style="display: block; margin: auto;" /&gt;
+]
+
+---
+##Linear regression
+What's the relationship between slope in LR and Pearson's r?
+`$$\hat {\beta} = {\rm cor}(Y_i, X_i) \cdot \frac{ {\rm SD}(Y_i) }{ {\rm SD}(X_i) }$$`
+--
+
+```r
+# standardize x &amp; y, can do manually or easier with scale function 
+# perform LR with standardized data
+
+df_std &lt;- df %&gt;% mutate(across(where(is.numeric), scale))
+mod1 &lt;- lm( bp~age, df_std); tidy(mod1)
+```
+
+```
+## # A tibble: 2 × 5
+##   term        estimate std.error statistic  p.value
+##   &lt;chr&gt;          &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;
+## 1 (Intercept) 1.38e-15    0.0951  1.45e-14 1.00    
+## 2 age         3.24e- 1    0.0956  3.39e+ 0 0.000995
+```
+
+.red[Once data is standardized then r = slope]
+---
+
+## What is your interpretation?
+
+
+&lt;img src="lr_files/figure-html/unnamed-chunk-6-1.svg" width="80%" style="display: block; margin: auto;" /&gt;
+--
+One causal explanation:  
+
+Better students score high on midterm and then get over confident for the final, while poorer students increase their studying for the final after a low midterm score
+---
+## Linrear regression (Bayesian)
+.pull-left[
+
+&lt;img src="lr_files/figure-html/unnamed-chunk-7-1.svg" width="60%" style="display: block; margin: auto;" /&gt;
+The option `refresh = 0` suppresses the default Stan sampling progress output. For more complex models and bigger data, it can be
+useful to see the progress.     
+Note in `stan_glm` using the default weakly informative priors which can be seen with `prior_summary(model)`
+]
+.pull-right[
+
+```r
+fit_1 &lt;- stan_glm(final ~ midterm, data=exams, refresh = 0)
+print(fit_1, digits=2)
+```
+
+```
+## stan_glm
+##  family:       gaussian [identity]
+##  formula:      final ~ midterm
+##  observations: 1000
+##  predictors:   2
+## ------
+##             Median MAD_SD
+## (Intercept) 24.84   1.36 
+## midterm      0.51   0.03 
+## 
+## Auxiliary parameter(s):
+##       Median MAD_SD
+## sigma 11.59   0.27 
+## 
+## ------
+## * For help interpreting the printed output see ?print.stanreg
+## * For info on the priors used see ?prior_summary.stanreg
+```
+]
+---
+## Priors
+Priors are often viewed as the Achilles' heel of Bayesian analyses.    
+
+My personal belief, they are a **strength** as they allow the incorporation of prior knowledge, are entirely transparent and are updated by the current data following the uncontested laws of probability.    
+
+Bayesian analyses are sometimes done using **flat** or **non-informative** priors to allow final results to be completely dominated by the data.    
+
+**This is rarely a good idea**   
+
+For example, using the prior `\(\theta\)` = N(0, `\(\sigma\)` = 500) produces some strange beliefs
+
+---
+## Prior - N(0,500)
+
+Let's do some simulations
+
+
+
+```r
+theta &lt;- rnorm(1e5, mean = 0, sd = 500)
+p_approx &lt;- mean(abs(theta) &lt; 250)
+print(paste("Pr(-250 &lt; theta &lt; 250) =", round(p_approx, 2)))
+```
+
+```
+## [1] "Pr(-250 &lt; theta &lt; 250) = 0.38"
+```
+
+
+
+```r
+d &lt;- data.frame(theta, clr = abs(theta) &gt; 250)
+library(ggplot2)
+g &lt;- ggplot(d, aes(x = theta, fill = clr)) +
+  geom_histogram(binwidth = 5, show.legend = FALSE) +
+  scale_y_continuous(name = "", labels = NULL, expand = c(0,0)) +
+  scale_x_continuous(name = expression(theta), breaks = c(-1000, -250, 250, 1000))
+```
+
+---
+## Prior - N(0,500)
+&lt;img src="lr_files/figure-html/unnamed-chunk-11-1.svg" width="20%" style="display: block; margin: auto;" /&gt;
+
+Very hard to imagine how this could represent anyone's serious prior beliefs, yet non-informative priors remain in use.      
+
+Some amount of prior information will be available. For example, even if there is nothing to suggest a priori that a particular coefficient will be positive or negative, there is almost always enough information to suggest that different orders of magnitude are not equally likely. Making use of this information when setting a prior scale parameter is simple — one heuristic is to set the scale an order of magnitude bigger than you suspect it to be— and has the added benefit of helping to stabilize computations.     
+
+These **vague** priors are the default priors in most packages.
+
+---
+
+## Same results with OLS
+
+Since there are 1,000 data points the priors contribute very little and give the same numerical results as standard linrear regression with `lm` function
+
+
+
+```r
+fit_2 &lt;- lm(final ~ midterm, data=exams)
+print(fit_2, digits=2)
+```
+
+```
+## 
+## Call:
+## lm(formula = final ~ midterm, data = exams)
+## 
+## Coefficients:
+## (Intercept)      midterm  
+##       24.82         0.51
+```
+
+---
+## Plot results
+
+.pull-left[
+
+```r
+ggplot(exams,aes(midterm,final)) +
+  geom_point() +
+  labs(x="Midterm exam score", y="Final exam score") +
+  geom_abline(intercept=coef(fit_1)[1], slope=coef(fit_1)[2], color="red") +
+  scale_x_continuous( expand = c(0,0) , limits = c(0,100) )+
+  scale_y_continuous( expand = c(0,0), limits = c(0,100) ) +
+  theme_bw()
+```
+]
+.pull-right[
+&lt;img src="lr_files/figure-html/unnamed-chunk-14-1.svg" width="80%" style="display: block; margin: auto;" /&gt;
+]
+
+---
+## Data generating process
+
+- Data was simulated    
+- No association between midterm and final variables   
+- Both = function(true ability, a random variable, and a noise component)   
+
+
+```r
+#### Simulate fake data
+n &lt;- 1000
+# set the random seed to get reproducible results
+# change the seed to experiment with variation due to random noise
+set.seed(2243)
+true_ability &lt;- rnorm(n, 50, 10)
+noise_1 &lt;- rnorm(n, 0, 10)
+noise_2 &lt;- rnorm(n, 0, 10)
+*midterm &lt;- true_ability + noise_1
+*final &lt;- true_ability + noise_2
+exams &lt;- data.frame(midterm, final)
+```
+&lt;br&gt;    
+**Interpretation: Regression to the mean**  
+.red[Emphasizes need to separate statistical and causal models]
+
+---
+##Four key steps for Bayesian modeling
+
+Guide for the fundamentals of both single-level and hierarchical linear regression modeling      
+
+Will generally use **Stan** and front end `rstanarm` package (`brms` is good alternative)    
+&lt;br&gt;    
+Detailed vignettes can be found [here](http://mc-stan.org/rstanarm/articles/)
+
+- **Step 1** Specify the data model and prior  - .red[Prior * likelihood] `\(\propto\)` .red[posterior]         
+- S**tep 2** Estimate the model parameters  - Bayes theorem typically involves using a numerical algorithm
+to draw a representative sample from the posterior distribution         
+- **Step 3** Check sampling quality and model fit  - Graphical and numerical checks are necessary of fails go back to Step 1   
+- **Step 4** Summarize, interpret results - Make posterior predictions    
+&lt;br&gt;    
+For some simple models, analytical (closed-form ) solutions are possible    
+Almost all non-trivial models the full posterior has to be approximated numerically by sampling (simulating draws)  based on Monte Carlo principle
+---
+##Assessing convergence
+
+Check whether the chains converge to the same area    
+Recommended convergence checks include monitoring the `\(\hat{R}\)` statistic and visual checks        
+`\(\hat{R}\)` (also referred to as the potential scale reduction factor) is based on comparing the variation between the chains to the variation within the chains      
+If all chains converge `\(\hat{R}\)` will be close to 1 and  &lt; 1.1   
+
+
+&lt;img src="images/convergence.png" width="60%" style="display: block; margin: auto;" /&gt;
+
+The four chains appear to be the same except for noise with no discernible pattern, a strong sign of convergence
+
+---
+## `stan_glm` modeling in four steps
+**Step 0.** Install software and prepare data      
+The data is available in this excellent [tutorial](https://www.tqmp.org/RegularArticles/vol14-2/p099/p099.pdf) and essentially examines the relationship between 2 continuous variables **valence** (sensation of pleasantness) and **arousal** in 20 individuals measured at 14 time points
+
+
+```r
+# install.packages(c("rstanarm", "bayesplot", "ggplot2", "broom")) 
+library("rstanarm") 
+library("bayesplot") 
+library("ggplot2") 
+library("broom")
+
+# note: the line below to run chains in parallel (saves time)
+options(mc.cores = parallel::detectCores())
+rstan::rstan_options(auto_write = TRUE)
+
+# default plotting theme
+theme_set(bayesplot::theme_default(base_size = 15))
+
+#load data from https://www.tqmp.org/RegularArticles/vol14-2/p099/p099.pdf
+dat &lt;- read.csv(here("data", "sampledata.csv"), header=TRUE) 
+```
+
+---
+##Step 1. Specify the model
+Usual linear regression form    
+`$$y_i = \beta_0 + \beta_1 * X_i + \epsilon_i    \;and \;  \epsilon_i \sim N(0, \sigma^2)$$`     
+Equivalent Bayesian form     
+`$$y_i \sim N(\beta_0 + \beta_1 * X_i, \sigma^2)$$`
+&lt;br&gt;    
+`stan_glm` syntax is same as `lm` syntax with first part of the call specifying the outcome and predictors.   
+Unless the ‘family’ argument is specified, `stan_glm` assumes that the likelihood is normal (Gaussian) with an identity link function   
+
+
+```r
+SingleLevelModel &lt;- stan_glm( valence ~ arousal, data = dat, refresh=0)
+```
+
+The default priors are weakly informative andmay be seen with `prior_summary()`       
+Informative priors may be used if available
+---
+##Step 2. Estimate the model parameters
+
+By default, `rstanarm `uses four Markov chains with 2000 iterations each, half of which are discarded as “warm-up”.    
+&lt;br&gt;    
+A warm-up sampling phase is used to give the algorithm time to find the target posterior area      
+&lt;br&gt;     
+Defaults may be modified using the `chains `and `iter` arguments  (may be needed if problems of convergnce i.e n_eff &gt; 1000)      
+
+
+```r
+# Example of adapting priors and sampler settings 
+SingleLevelModelMod &lt;- stan_glm( valence ~ arousal,data = dat, 
+                        prior = normal(0,1,autoscale=FALSE), 
+                        prior_intercept=normal(50,100, autoscale=FALSE), 
+                        iter = 4000, adapt_delta = 0.99, refresh=0)
+```
+
+---
+##Step 3. Check sampling quality
+
+
+```r
+summarySingleLevelModel &lt;- summary(SingleLevelModel,probs = c(0.025, 0.975)); print(summarySingleLevelModel)
+```
+
+```
+## 
+## Model Info:
+##  function:     stan_glm
+##  family:       gaussian [identity]
+##  formula:      valence ~ arousal
+##  algorithm:    sampling
+##  sample:       4000 (posterior sample size)
+##  priors:       see help('prior_summary')
+##  observations: 272
+##  predictors:   2
+## 
+## Estimates:
+##               mean   sd   2.5%   97.5%
+## (Intercept) 14.6    3.7  7.5   21.7   
+## arousal      0.8    0.1  0.7    0.9   
+## sigma       16.9    0.7 15.5   18.4   
+## 
+## Fit Diagnostics:
+##            mean   sd   2.5%   97.5%
+## mean_PPD 59.7    1.4 56.9   62.6   
+## 
+## The mean_ppd is the sample average posterior predictive distribution of the outcome variable (for details see help('summary.stanreg')).
+## 
+## MCMC diagnostics
+##               mcse Rhat n_eff
+## (Intercept)   0.1  1.0  3934 
+## arousal       0.0  1.0  3985 
+## sigma         0.0  1.0  3978 
+## mean_PPD      0.0  1.0  4323 
+## log-posterior 0.0  1.0  1847 
+## 
+## For each parameter, mcse is Monte Carlo standard error, n_eff is a crude measure of effective sample size, and Rhat is the potential scale reduction factor on split chains (at convergence Rhat=1).
+```
+---
+##Step 3. Check sampling quality
+- 3 quantities related to the performance of the sampler: Monte Carlo standard error (MCSE), `\(\hat{R}\)` and effective sample size (n_eff)    
+- **Visual check**      
+- **Posterior predictive checks**
+ Can also explore the posterior with with `shinystan::launch_shinystan(SingleLevelModel)`
+
+
+```r
+plot(SingleLevelModel, "trace", pars = "arousal")
+```
+
+&lt;img src="lr_files/figure-html/unnamed-chunk-21-1.svg" width="30%" style="display: block; margin: auto;" /&gt;
+
+---
+##Step 4. Summarize and interpret results
+.small[Summary information with `SingleLevelModel$stan_summary`]
+
+```r
+SingleLevelModel$stan_summary
+```
+
+```
+##                     mean   se_mean      sd       2.5%        10%       25%
+## (Intercept)      14.6491 0.0582717 3.65512     7.4514     9.9735    12.264
+## arousal           0.8049 0.0009922 0.06263     0.6827     0.7244     0.763
+## sigma            16.9024 0.0115006 0.72532    15.5208    15.9829    16.396
+## mean_PPD         59.6746 0.0218819 1.43874    56.8742    57.8866    58.710
+## log-posterior -1161.4252 0.0283904 1.22005 -1164.5130 -1163.0573 -1161.968
+##                      50%        75%        90%      97.5% n_eff   Rhat
+## (Intercept)      14.6588    17.0555    19.3719    21.7336  3934 1.0004
+## arousal           0.8055     0.8462     0.8839     0.9288  3985 1.0004
+## sigma            16.8800    17.3808    17.8446    18.3788  3978 0.9999
+## mean_PPD         59.6643    60.6232    61.5240    62.5951  4323 0.9994
+## log-posterior -1161.1011 -1160.5223 -1160.2395 -1160.0602  1847 1.0008
+```
+.small[Extract posterior draws from fitted model for specific questions -&gt; e.g. P(slope &gt;x) (e.g 0.7)]
+
+```r
+posteriorSamples &lt;- as.matrix(SingleLevelModel, pars = "arousal"); mean(posteriorSamples &gt; 0.7)
+```
+
+```
+## [1] 0.9537
+```
+.small[Posterior probability slope coefficient &gt; 0.7 is about 96% ]     
+
+---
+##Posterior predictive checks 
+Compare the observed data to datasets simulated according to our assumed data generating process and the posterior draws of the model parameters. 
+
+
+```r
+pp_check(SingleLevelModel, nreps = 100) + xlab("valence")
+```
+
+&lt;img src="lr_files/figure-html/unnamed-chunk-24-1.svg" width="35%" style="display: block; margin: auto;" /&gt;
+
+Draws from the posterior predictive distribution (thin light blue lines) and the observed data (thick dark blue line) have similar distributions     
+
+
+---
+##Posterior predictive checks
+Predictive plot of  **Y** (valence) &amp; **X** (arousal) link. Dark regression line  = posterior mean estimate of the intercept and slope (β1 ≈ 0.8). Blue regression lines are computed from a random subset of the posterior draws of these two parameters  and shows the associated uncertainty.
+
+
+```
+## [1] "(Intercept)" "arousal"     "sigma"
+```
+
+&lt;img src="lr_files/figure-html/unnamed-chunk-25-1.svg" width="30%" style="display: block; margin: auto;" /&gt;
+
+
+Limitation: measures are not independent 20 individuals measured at 14 time points
+---
+
+## Understanding simple regression models 
+Estimating the mean is the same as regressing on a constant term 
+.pull-left[
+Generate some fake data &amp; calculate the mean and std error
+
+```r
+set.seed(12345)
+n_0 &lt;- 20  
+y_0 &lt;- rnorm(n_0, 2.0, 5.0)  
+fake_0 &lt;- data.frame(y_0)  
+mean(fake_0$y_0)
+```
+
+```
+## [1] 2.383
+```
+
+```r
+sd(fake_0$y_0)/sqrt(n_0)
+```
+
+```
+## [1] 0.9324
+```
+]
+.pull-right[
+Regression on a constant term 
+
+```r
+fit_0 &lt;- stan_glm(y_0 ~ 1, data=fake_0,  prior_intercept=NULL, prior=NULL, prior_aux=NULL, refresh =0); print(fit_0) 
+```
+
+```
+## stan_glm
+##  family:       gaussian [identity]
+##  formula:      y_0 ~ 1
+##  observations: 20
+##  predictors:   1
+## ------
+##             Median MAD_SD
+## (Intercept) 2.4    1.0   
+## 
+## Auxiliary parameter(s):
+##       Median MAD_SD
+## sigma 4.4    0.8   
+## 
+## ------
+## * For help interpreting the printed output see ?print.stanreg
+## * For info on the priors used see ?prior_summary.stanreg
+```
+]
+---
+## Estimating a difference = regressing on an indicator variable  
+Add new group: 30 observations from N(8.0, 5.0) 
+.pull-left[
+Calculate the mean difference &amp; std error
+
+```r
+set.seed(12345)
+n_1 &lt;- 30;  y_1 &lt;- rnorm(n_1, 8.0, 5.0) 
+diff &lt;- mean(y_1) - mean(y_0)  
+se_0 &lt;- sd(y_0)/sqrt(n_0)  
+se_1 &lt;- sd(y_1)/sqrt(n_1)  
+se &lt;- sqrt(se_0^2 + se_1^2)  
+print(c(diff, se))
+```
+
+```
+## [1] 6.011 1.266
+```
+6.01for the difference and 1.27 for its standard  error is consistent with the construction of our simulations in which the true population  difference was 6.0
+]
+.pull-right[
+Regression with indicator variable
+
+```r
+n &lt;- n_0 + n_1; y &lt;- c(y_0, y_1);  x &lt;- c(rep(0, n_0), rep(1, n_1))  
+fake &lt;- data.frame(x, y)  
+fit &lt;- stan_glm(y ~ x, data=fake, prior_intercept=NULL, prior=NULL, prior_aux=NULL, refresh = 0); print(fit) 
+```
+
+```
+## stan_glm
+##  family:       gaussian [identity]
+##  formula:      y ~ x
+##  observations: 50
+##  predictors:   2
+## ------
+##             Median MAD_SD
+## (Intercept) 2.4    1.0   
+## x           6.0    1.3   
+## 
+## Auxiliary parameter(s):
+##       Median MAD_SD
+## sigma 4.6    0.5   
+## 
+## ------
+## * For help interpreting the printed output see ?print.stanreg
+## * For info on the priors used see ?prior_summary.stanreg
+```
+The estimate of the slope, 6.9, is identical to the difference in means, `\(\bar{y_1} − \bar{y_0}\)` and    
+the intercept (2.4) = `\(\bar{y_0}\)`
+]
+---
+## Visual equivalence
+
+
+```r
+par(mar=c(3,3,3,2), mgp=c(1.7,.5,0), tck=-.01)
+plot(x, y, xlab="Indicator, x", ylab="y", bty="l", xaxt="n", main="Regression on an indicator is the same\nas computing a difference in means",  pch=19, cex=.5)
+axis(1, c(0, 1)); abline(h=mean(y[x==0]), lty=2, col="gray50"); abline(h=mean(y[x==1]), lty=2, col="gray50"); abline(coef(fit)[1], coef(fit)[2])
+text(.5, -1 + coef(fit)[1] + .5*coef(fit)[2], paste("y =", arm::fround(coef(fit)[1], 2), "+", arm::fround(coef(fit)[2], 2), "x"),cex=.9,adj=0); text(.05, -1 + mean(y[x==0]), expression(paste(bar(y)[0], " = 2.41")), col="gray30", cex=.9, adj=0)
+text(.95, 1 + mean(y[x==1]), expression(paste(bar(y)[1], " = 9.22")), col="gray30", cex=.9, adj=1)
+```
+
+&lt;img src="lr_files/figure-html/unnamed-chunk-30-1.svg" width="80%" style="display: block; margin: auto;" /&gt;
+
+For binary indicator, slope is simply the average difference in the outcome between the two groups     
+For continuous variable estimated slope is a weighted average of slopes for every possible pair of 2 points ($n^2$)
+---
+## Credibility or compatibility intervals
+In Bayesian inference often speak of uncertainty intervals, credibility or compatibility intervals to distinguish from frequentist confidence intervals   
+68% confidence interval for slope = median +/- mad_sd (standard deviation of mean absolute deviation) = 6.6 +/- 1.4 = [5.2 - 8.0]    
+
+This can also be calculated by extracting the simulations from the posterior distribution
+
+```r
+sims &lt;- as.matrix(fit)  
+paste0("68% credible interval ", round(quantile(sims[,"x"], c(0.16, 0.84)),2))
+```
+
+```
+## [1] "68% credible interval 4.68" "68% credible interval 7.32"
+```
+
+```r
+paste0("95% credible interval ", round(quantile(sims[,"x"], c(0.025, 0.975)),2)) 
+```
+
+```
+## [1] "95% credible interval 3.33" "95% credible interval 8.67"
+```
+
+---
+# Gapminder example
+
+Lets create a dataset from the `gapminder` package.       
+Filter the dataset to a more visually manageable number of data points
+
+```r
+library(gapminder)
+data(gapminder)
+dat &lt;- filter(gapminder, continent=="Asia" &amp; year==2007 &amp; pop&lt;50000000) %&gt;% #select sample
+  mutate(fitted=lm(lifeExp~gdpPercap)$fitted) # added predicted values
+```
+
+---
+
+# Plot
+
+.pull-left[
+
+```r
+g &lt;- ggplot(dat, aes(gdpPercap, lifeExp)) +
+  geom_point() +
+  geom_point(aes(x=mean(gdpPercap), y=mean(lifeExp)), colour="red", size=5) +
+  geom_smooth(method='lm', se=FALSE) +
+  geom_segment(aes(x = gdpPercap, y = lifeExp,
+                   xend = gdpPercap, yend = fitted)) +
+  ggtitle("Life expectancy vs GDP in Asian countries\n (with populations &lt; 50 million)") +
+  theme_bw()
+```
+]
+
+.pull-right[
+&lt;img src="lr_files/figure-html/unnamed-chunk-34-1.svg" width="80%" style="display: block; margin: auto;" /&gt;
+]
+
+
+What is the `\(\color{red}{\text{red}}\)` point?
+
+---
+
+# Bayesian approach
+
+
+```r
+library(rstanarm)
+dat$gdpPercap &lt;- dat$gdpPercap / 1000
+fit_1 &lt;- stan_glm(lifeExp~gdpPercap, data=dat, refresh=0)
+print(fit_1, digits=4)  
+```
+
+```
+## stan_glm
+##  family:       gaussian [identity]
+##  formula:      lifeExp ~ gdpPercap
+##  observations: 23
+##  predictors:   2
+## ------
+##             Median  MAD_SD 
+## (Intercept) 64.6938  1.9629
+## gdpPercap    0.4039  0.0931
+## 
+## Auxiliary parameter(s):
+##       Median MAD_SD
+## sigma 6.7204 1.0569
+## 
+## ------
+## * For help interpreting the printed output see ?print.stanreg
+## * For info on the priors used see ?prior_summary.stanreg
+```
+What does this mean?
+---
+# Interpretation
+The fitted model is  lifeExp = 64.7 + 0.4 ∗ gdpPercap + error.     
+The residual standard deviation, sigma = 6.7,  indicates that lifeExp  will be within ± 6.7 of the linear predictor for about 68% of the data points and will be within  ± 2 ∗ 6.7 = 13.4 of the predictor approximately 95% of the time (cf normal distribution)    
+
+We get an estimating the proportion of variance explained, as 1 minus the  proportion of variance unexplained     
+`$$R^2 = 1 - \frac{\sigma^2_{fit\_1}}{sd(lifeExp)^2} = 0.44$$`
+meaning that the linear model accounts for 44% of the variance in lifeExp in these data.
+
+It is inappropriate to say “the **effect**" of $1000 gdpPercap increase on lifeExp is 0.4 years as this suggests an individual causal effect which is not estimated  the model of this  observational data, that richer populations have higher life expectancy on average. These data  allow between-population comparisons or predictions, but do not  speak to causal within-person effects.  
+
+---
+
+# Summary
+
+To summarize: regression is a mathematical tool for making predictions.     
+
+Regression coefficients  can sometimes be interpreted as effects, but they can always be interpreted as average comparisons. 
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"ratio": "3:2",
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
